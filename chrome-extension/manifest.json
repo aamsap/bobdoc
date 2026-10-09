@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Page to Doc",
+  "name": "Bobdoc",
   "version": "2.0.0",
-  "description": "Convert any webpage to a clean DOCX or PDF using smart content extraction.",
+  "description": "Tired of copy-pasting articles with broken formatting? One click exports any webpage to a clean, properly formatted DOCX or PDF.",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": [
     "https://bobdoc.vercel.app/*"
