@@ -84,17 +84,6 @@
       letter-spacing: -0.3px;
     }
 
-    .nav-logo-icon {
-      width: 30px;
-      height: 30px;
-      background: var(--accent);
-      border-radius: 7px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
     .nav-links {
       display: flex;
       align-items: center;
@@ -668,13 +657,7 @@
   <nav>
     <div class="container">
       <a href="/" class="nav-logo">
-        <div class="nav-logo-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M3 2h6.5L13 5.5V14H3V2z" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/>
-            <path d="M9.5 2v3.5H13" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M5.5 9h5M5.5 11.5h3" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </div>
+        <img src="/icon48.png" width="28" height="28" alt="Bobdoc" style="border-radius:6px;display:block;" />
         Bobdoc
       </a>
 
@@ -694,17 +677,17 @@
   <section class="hero">
     <span class="hero-badge">
       <span class="hero-badge-dot"></span>
-      Chrome Extension — Free
+      Free Chrome Extension
     </span>
 
-    <h1>Turn any webpage<br/>into a <em>clean doc</em></h1>
+    <h1>Stop copy-pasting.<br/><em>One click</em> to a clean doc.</h1>
 
-    <p>Smart extraction removes ads, navbars, and noise. Export to properly formatted DOCX or PDF with real margins, fonts, and table borders.</p>
+    <p>You found the article. Why spend another 5 minutes fighting broken formatting? Bobdoc exports any webpage to a proper DOCX or PDF — instantly.</p>
 
     <div class="hero-ctas">
       <a href="https://github.com/aamsap/bobdoc/releases/latest" class="btn-primary" target="_blank" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>
-        Download — it's free
+        Download Bobdoc — free
       </a>
       <a href="#how-it-works" class="btn-ghost">
         See how it works
@@ -754,8 +737,8 @@
   <section class="section" id="how-it-works">
     <div class="container">
       <div class="section-header">
-        <h2>Three clicks to a clean doc</h2>
-        <p>No copying, no pasting, no manual cleanup.</p>
+        <h2>From webpage to document<br/>in one click</h2>
+        <p>No selecting. No pasting. No fixing broken paragraphs.</p>
       </div>
 
       <div class="steps">
@@ -764,17 +747,17 @@
           <div class="step-icon blue">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="14" height="14" rx="3" stroke="#3b82f6" stroke-width="1.4"/><path d="M6 9h6M9 6v6" stroke="#3b82f6" stroke-width="1.4" stroke-linecap="round"/></svg>
           </div>
-          <h3>Open any page</h3>
-          <p>Navigate to any article, blog post, documentation, or report in Chrome.</p>
+          <h3>You're on the page</h3>
+          <p>Any article, report, documentation, or blog post open in Chrome.</p>
         </div>
 
         <div class="step fade-up">
           <div class="step-num">02</div>
           <div class="step-icon white">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 9h10M9 4l5 5-5 5" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 4v6M6 8l3 3 3-3" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 14h10" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round"/></svg>
           </div>
-          <h3>Click the extension</h3>
-          <p>Hit "Download DOCX" or "Download PDF". Readability strips away the noise automatically.</p>
+          <h3>Click once</h3>
+          <p>Open Bobdoc, choose DOCX or PDF. That's it. No selecting text, no pasting, no reformatting.</p>
         </div>
 
         <div class="step fade-up">
@@ -782,8 +765,8 @@
           <div class="step-icon green">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 9.5l3.5 3.5L14 6" stroke="#22c55e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-          <h3>Get a perfect file</h3>
-          <p>Your file downloads with proper fonts, margins, headings, and table borders — ready to share or edit.</p>
+          <h3>Done. A real document.</h3>
+          <p>Proper headings, margins, table borders, and page breaks — ready to send or edit in Word.</p>
         </div>
       </div>
     </div>
@@ -793,8 +776,8 @@
   <section class="section" id="features">
     <div class="container">
       <div class="section-header">
-        <h2>Built for real output quality</h2>
-        <p>Every detail that makes exported documents actually usable.</p>
+        <h2>Everything copy-paste<br/>always breaks</h2>
+        <p>Bobdoc handles it all automatically.</p>
       </div>
 
       <div class="features">
@@ -802,32 +785,32 @@
           <div class="feature-icon">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="10" height="13" rx="2" stroke="#f0f0f0" stroke-width="1.3"/><path d="M5 7h4M5 10h4M5 13h2" stroke="#f0f0f0" stroke-width="1.2" stroke-linecap="round"/><path d="M12 2h2a2 2 0 012 2v11a2 2 0 01-2 2h-2" stroke="#f0f0f0" stroke-width="1.3" stroke-linecap="round"/></svg>
           </div>
-          <h3>Smart noise removal</h3>
-          <p>Mozilla Readability extracts only the article content — ads, navigation, cookie banners, sidebars, and comment sections are stripped before conversion.</p>
+          <h3>Ads and sidebars? Gone.</h3>
+          <p>Bobdoc extracts only the article — stripping ads, navbars, cookie banners, related posts, and comment sections before converting.</p>
         </div>
 
         <div class="feature fade-up">
           <div class="feature-icon">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="11" rx="2" stroke="#f0f0f0" stroke-width="1.3"/><path d="M6 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="#f0f0f0" stroke-width="1.3" stroke-linecap="round"/><path d="M2 8h14M6 8v7M12 8v7" stroke="#f0f0f0" stroke-width="1.2" stroke-linecap="round"/></svg>
           </div>
-          <h3>Tables with borders</h3>
-          <p>Tables are preserved with proper cell borders, header shading, and padding. No more borderless cells or collapsed columns in Word.</p>
+          <h3>Tables that actually look right</h3>
+          <p>Cell borders, header shading, proper padding. No more collapsing columns or invisible grid lines when you open in Word.</p>
         </div>
 
         <div class="feature fade-up">
           <div class="feature-icon">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v10M5 8l4 4 4-4" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 16h12" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round"/></svg>
           </div>
-          <h3>Real Puppeteer PDF</h3>
-          <p>PDFs are generated server-side by a headless Chrome instance — real text, real page breaks, proper A4 margins, and searchable content. Not a screenshot.</p>
+          <h3>PDF you can actually read</h3>
+          <p>Real text, real page breaks, A4 margins, page numbers. Not a blurry screenshot crammed into a PDF envelope.</p>
         </div>
 
         <div class="feature fade-up">
           <div class="feature-icon">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 6h10M4 9h7M4 12h5" stroke="#f0f0f0" stroke-width="1.3" stroke-linecap="round"/><rect x="2" y="2" width="14" height="14" rx="2.5" stroke="#f0f0f0" stroke-width="1.3"/></svg>
           </div>
-          <h3>Full formatting preserved</h3>
-          <p>Headings, bold, italic, underline, inline code, blockquotes, hyperlinks, superscript, and subscript all carry over correctly in both DOCX and PDF.</p>
+          <h3>Formatting that survives</h3>
+          <p>Headings, bold, italic, blockquotes, code, and hyperlinks all carry over in both DOCX and PDF. Open it and it looks like a document, not a paste job.</p>
         </div>
       </div>
     </div>
@@ -918,11 +901,11 @@
 
   <!-- ── CTA ── -->
   <div class="cta-section">
-    <h2>Ready to export anything?</h2>
-    <p>Free Chrome extension. No account required.</p>
+    <h2>Stop copy-pasting.<br/>Just download Bobdoc.</h2>
+    <p>Free. No account. Works on any article in Chrome.</p>
     <a href="https://github.com/aamsap/bobdoc/releases/latest" class="btn-primary" style="display:inline-flex;" target="_blank" rel="noopener">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>
-      Download Extension
+      Download Bobdoc — free
     </a>
   </div>
 
@@ -930,9 +913,7 @@
   <footer>
     <div class="container">
       <div class="footer-left">
-        <div class="nav-logo-icon" style="width:22px;height:22px;border-radius:5px;">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 2h6.5L13 5.5V14H3V2z" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/><path d="M9.5 2v3.5H13" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
+        <img src="/icon48.png" width="22" height="22" alt="Bobdoc" style="border-radius:5px;display:block;" />
         Bobdoc
         <span style="color:var(--muted-2)">·</span>
         <span style="color:var(--muted-2)">© 2026</span>
