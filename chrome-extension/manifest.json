@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Page to Doc",
+  "version": "2.0.0",
+  "description": "Convert any webpage to a clean DOCX or PDF using smart content extraction.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://bobdoc.vercel.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "libs/Readability.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

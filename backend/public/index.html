@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bobdoc — Export Any Webpage to DOCX or PDF</title>
+  <meta name="description" content="A Chrome extension that converts any webpage to a clean, well-formatted DOCX or PDF. Smart noise removal. Proper fonts, margins, and table borders." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & tokens ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0a;
+      --surface:   #111111;
+      --surface-2: #1a1a1a;
+      --border:    rgba(255,255,255,0.08);
+      --border-2:  rgba(255,255,255,0.14);
+      --text:      #f0f0f0;
+      --muted:     #888;
+      --muted-2:   #555;
+      --accent:    #3b82f6;
+      --accent-dim:#1d4ed8;
+      --green:     #22c55e;
+      --green-dim: #16a34a;
+      --radius:    10px;
+      --radius-lg: 16px;
+      --font:      'Geist', -apple-system, sans-serif;
+      --mono:      'Geist Mono', 'Courier New', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+
+    /* ── Layout helpers ──────────────────────────────────────────────── */
+    .container {
+      max-width: 1100px;
+      margin-inline: auto;
+      padding-inline: 24px;
+    }
+
+    /* ── Nav ─────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      height: 64px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10,10,10,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    nav .container {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.3px;
+    }
+
+    .nav-logo-icon {
+      width: 30px;
+      height: 30px;
+      background: var(--accent);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 14px;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .btn-nav {
+      font-size: 13px;
+      font-weight: 500;
+      padding: 7px 16px;
+      background: var(--text);
+      color: #000;
+      border-radius: 7px;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-nav:hover { opacity: 0.88; }
+
+    /* ── Hero ────────────────────────────────────────────────────────── */
+    .hero {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(59,130,246,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 80% 60%, rgba(34,197,94,0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--accent);
+      border: 1px solid rgba(59,130,246,0.3);
+      background: rgba(59,130,246,0.08);
+      padding: 5px 12px;
+      border-radius: 99px;
+      margin-bottom: 28px;
+      letter-spacing: 0.02em;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse-dot 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+
+    .hero h1 {
+      font-size: clamp(38px, 6vw, 68px);
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: -2px;
+      max-width: 780px;
+      margin-bottom: 22px;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .hero p {
+      font-size: 17px;
+      color: var(--muted);
+      max-width: 480px;
+      line-height: 1.65;
+      margin-bottom: 40px;
+    }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 13px 26px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14.5px;
+      font-weight: 600;
+      border-radius: var(--radius);
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn-primary:hover { background: var(--accent-dim); }
+    .btn-primary:active { transform: scale(0.98); }
+
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 12px 22px;
+      border: 1px solid var(--border-2);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: var(--radius);
+      transition: border-color 0.15s, color 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn-ghost:hover { border-color: var(--muted-2); color: var(--text); }
+    .btn-ghost:active { transform: scale(0.98); }
+
+    /* ── Preview card ────────────────────────────────────────────────── */
+    .hero-preview {
+      margin-top: 64px;
+      position: relative;
+      width: 100%;
+      max-width: 820px;
+    }
+
+    .preview-card {
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset;
+    }
+
+    .preview-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+
+    .preview-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .preview-dot.r { background: #ff5f56; }
+    .preview-dot.y { background: #ffbd2e; }
+    .preview-dot.g { background: #27c93f; }
+
+    .preview-url {
+      flex: 1;
+      text-align: center;
+      font-size: 11.5px;
+      font-family: var(--mono);
+      color: var(--muted-2);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 4px 10px;
+    }
+
+    .preview-body {
+      padding: 28px 32px;
+      display: grid;
+      grid-template-columns: 1fr 240px;
+      gap: 24px;
+      min-height: 280px;
+    }
+
+    .preview-article h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      letter-spacing: -0.3px;
+    }
+
+    .preview-line {
+      height: 10px;
+      border-radius: 5px;
+      background: var(--surface-2);
+      margin-bottom: 8px;
+    }
+
+    .preview-line.short  { width: 60%; }
+    .preview-line.medium { width: 85%; }
+    .preview-line.long   { width: 100%; }
+
+    .preview-aside {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .preview-aside-label {
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--muted-2);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+    }
+
+    .preview-ad-block {
+      height: 54px;
+      border-radius: 6px;
+      background: repeating-linear-gradient(
+        -45deg,
+        rgba(255,255,255,0.02),
+        rgba(255,255,255,0.02) 2px,
+        transparent 2px,
+        transparent 8px
+      );
+      border: 1px dashed var(--border-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--muted-2);
+    }
+
+    /* Arrow */
+    .preview-arrow {
+      position: absolute;
+      right: -20px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── How it works ────────────────────────────────────────────────── */
+    .section {
+      padding: 96px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-header {
+      margin-bottom: 56px;
+    }
+
+    .section-header h2 {
+      font-size: clamp(28px, 3.5vw, 42px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+
+    .section-header p {
+      font-size: 16px;
+      color: var(--muted);
+      max-width: 440px;
+    }
+
+    /* Steps */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+
+    .step {
+      padding: 32px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .step:first-child { border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
+    .step:last-child  { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
+
+    .step:hover { background: var(--surface-2); }
+
+    .step-num {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted-2);
+      margin-bottom: 20px;
+      letter-spacing: 0.05em;
+    }
+
+    .step-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      flex-shrink: 0;
+    }
+
+    .step-icon.blue  { background: rgba(59,130,246,0.12); }
+    .step-icon.green { background: rgba(34,197,94,0.12); }
+    .step-icon.white { background: rgba(255,255,255,0.07); }
+
+    .step h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.2px;
+    }
+
+    .step p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── Features grid ───────────────────────────────────────────────── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+    }
+
+    .feature {
+      padding: 32px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+
+    .feature:nth-child(1) { border-radius: var(--radius-lg) 0 0 0; }
+    .feature:nth-child(2) { border-radius: 0 var(--radius-lg) 0 0; }
+    .feature:nth-child(3) { border-radius: 0 0 0 var(--radius-lg); }
+    .feature:nth-child(4) { border-radius: 0 0 var(--radius-lg) 0; }
+
+    .feature:hover { background: var(--surface-2); }
+
+    .feature-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .feature h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: -0.15px;
+    }
+
+    .feature p {
+      font-size: 13.5px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── Output quality comparison ───────────────────────────────────── */
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .compare-col {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .compare-header {
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .compare-header.bad  { background: rgba(239,68,68,0.06); }
+    .compare-header.good { background: rgba(34,197,94,0.06); }
+
+    .compare-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .compare-dot.bad  { background: #ef4444; }
+    .compare-dot.good { background: var(--green); }
+
+    .compare-body {
+      padding: 20px;
+    }
+
+    .compare-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    .compare-item:last-child { margin-bottom: 0; }
+
+    .compare-item svg { flex-shrink: 0; margin-top: 2px; }
+
+    /* ── Tech stack pill list ────────────────────────────────────────── */
+    .tech-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 32px;
+    }
+
+    .pill {
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 5px 12px;
+      border-radius: 6px;
+    }
+
+    /* ── CTA section ─────────────────────────────────────────────────── */
+    .cta-section {
+      padding: 96px 24px;
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .cta-section h2 {
+      font-size: clamp(30px, 4vw, 48px);
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .cta-section p {
+      font-size: 16px;
+      color: var(--muted);
+      margin-bottom: 36px;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 24px;
+    }
+
+    footer .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-right {
+      display: flex;
+      gap: 20px;
+    }
+
+    .footer-right a {
+      font-size: 13px;
+      color: var(--muted-2);
+      transition: color 0.15s;
+    }
+
+    .footer-right a:hover { color: var(--muted); }
+
+    /* ── Animations ──────────────────────────────────────────────────── */
+    @media (prefers-reduced-motion: no-preference) {
+      .fade-up {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.55s cubic-bezier(0.16,1,0.3,1), transform 0.55s cubic-bezier(0.16,1,0.3,1);
+      }
+
+      .fade-up.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .fade-up:nth-child(2) { transition-delay: 0.07s; }
+      .fade-up:nth-child(3) { transition-delay: 0.14s; }
+      .fade-up:nth-child(4) { transition-delay: 0.21s; }
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+
+      .hero h1 { letter-spacing: -1px; }
+      .hero p { font-size: 15px; }
+      .hero-preview { display: none; }
+
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 2px;
+      }
+
+      .step:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+      .step:last-child  { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+      .step:not(:first-child):not(:last-child) { border-radius: 0; }
+
+      .features {
+        grid-template-columns: 1fr;
+      }
+
+      .feature:nth-child(1) { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+      .feature:nth-child(2) { border-radius: 0; }
+      .feature:nth-child(3) { border-radius: 0; }
+      .feature:nth-child(4) { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+
+      .compare { grid-template-columns: 1fr; }
+      .preview-body { grid-template-columns: 1fr; }
+      .preview-aside { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Nav ── -->
+  <nav>
+    <div class="container">
+      <a href="/" class="nav-logo">
+        <div class="nav-logo-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 2h6.5L13 5.5V14H3V2z" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/>
+            <path d="M9.5 2v3.5H13" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5.5 9h5M5.5 11.5h3" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        Bobdoc
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#quality">Output quality</a></li>
+      </ul>
+
+      <a href="https://github.com/aamsap/bobdoc/releases/latest" class="btn-nav" target="_blank" rel="noopener">
+        Download Extension
+      </a>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <span class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      Chrome Extension — Free
+    </span>
+
+    <h1>Turn any webpage<br/>into a <em>clean doc</em></h1>
+
+    <p>Smart extraction removes ads, navbars, and noise. Export to properly formatted DOCX or PDF with real margins, fonts, and table borders.</p>
+
+    <div class="hero-ctas">
+      <a href="https://github.com/aamsap/bobdoc/releases/latest" class="btn-primary" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>
+        Download — it's free
+      </a>
+      <a href="#how-it-works" class="btn-ghost">
+        See how it works
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+
+    <!-- Browser preview mock -->
+    <div class="hero-preview">
+      <div class="preview-card">
+        <div class="preview-bar">
+          <span class="preview-dot r"></span>
+          <span class="preview-dot y"></span>
+          <span class="preview-dot g"></span>
+          <span class="preview-url">https://example.com/article/how-to-build-better-products</span>
+        </div>
+        <div class="preview-body">
+          <div class="preview-article">
+            <h2 style="color:var(--text)">How to Build Better Products</h2>
+            <div class="preview-line long"></div>
+            <div class="preview-line medium"></div>
+            <div class="preview-line long"></div>
+            <div class="preview-line short"></div>
+            <div style="height:16px"></div>
+            <div class="preview-line long"></div>
+            <div class="preview-line medium"></div>
+            <div class="preview-line long"></div>
+          </div>
+          <div class="preview-aside">
+            <div class="preview-aside-label">Removed by extension</div>
+            <div class="preview-ad-block">AD BANNER</div>
+            <div style="height:8px"></div>
+            <div class="preview-line short" style="opacity:0.4"></div>
+            <div class="preview-line medium" style="opacity:0.4"></div>
+            <div class="preview-line short" style="opacity:0.4"></div>
+            <div class="preview-line medium" style="opacity:0.4"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gradient fade -->
+      <div style="position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(to top,var(--bg),transparent);pointer-events:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);"></div>
+    </div>
+  </section>
+
+  <!-- ── How it works ── -->
+  <section class="section" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <h2>Three clicks to a clean doc</h2>
+        <p>No copying, no pasting, no manual cleanup.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step fade-up">
+          <div class="step-num">01</div>
+          <div class="step-icon blue">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="14" height="14" rx="3" stroke="#3b82f6" stroke-width="1.4"/><path d="M6 9h6M9 6v6" stroke="#3b82f6" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Open any page</h3>
+          <p>Navigate to any article, blog post, documentation, or report in Chrome.</p>
+        </div>
+
+        <div class="step fade-up">
+          <div class="step-num">02</div>
+          <div class="step-icon white">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 9h10M9 4l5 5-5 5" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Click the extension</h3>
+          <p>Hit "Download DOCX" or "Download PDF". Readability strips away the noise automatically.</p>
+        </div>
+
+        <div class="step fade-up">
+          <div class="step-num">03</div>
+          <div class="step-icon green">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 9.5l3.5 3.5L14 6" stroke="#22c55e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Get a perfect file</h3>
+          <p>Your file downloads with proper fonts, margins, headings, and table borders — ready to share or edit.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ── -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Built for real output quality</h2>
+        <p>Every detail that makes exported documents actually usable.</p>
+      </div>
+
+      <div class="features">
+        <div class="feature fade-up">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="10" height="13" rx="2" stroke="#f0f0f0" stroke-width="1.3"/><path d="M5 7h4M5 10h4M5 13h2" stroke="#f0f0f0" stroke-width="1.2" stroke-linecap="round"/><path d="M12 2h2a2 2 0 012 2v11a2 2 0 01-2 2h-2" stroke="#f0f0f0" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Smart noise removal</h3>
+          <p>Mozilla Readability extracts only the article content — ads, navigation, cookie banners, sidebars, and comment sections are stripped before conversion.</p>
+        </div>
+
+        <div class="feature fade-up">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="11" rx="2" stroke="#f0f0f0" stroke-width="1.3"/><path d="M6 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="#f0f0f0" stroke-width="1.3" stroke-linecap="round"/><path d="M2 8h14M6 8v7M12 8v7" stroke="#f0f0f0" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Tables with borders</h3>
+          <p>Tables are preserved with proper cell borders, header shading, and padding. No more borderless cells or collapsed columns in Word.</p>
+        </div>
+
+        <div class="feature fade-up">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v10M5 8l4 4 4-4" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 16h12" stroke="#f0f0f0" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Real Puppeteer PDF</h3>
+          <p>PDFs are generated server-side by a headless Chrome instance — real text, real page breaks, proper A4 margins, and searchable content. Not a screenshot.</p>
+        </div>
+
+        <div class="feature fade-up">
+          <div class="feature-icon">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 6h10M4 9h7M4 12h5" stroke="#f0f0f0" stroke-width="1.3" stroke-linecap="round"/><rect x="2" y="2" width="14" height="14" rx="2.5" stroke="#f0f0f0" stroke-width="1.3"/></svg>
+          </div>
+          <h3>Full formatting preserved</h3>
+          <p>Headings, bold, italic, underline, inline code, blockquotes, hyperlinks, superscript, and subscript all carry over correctly in both DOCX and PDF.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Output quality ── -->
+  <section class="section" id="quality">
+    <div class="container">
+      <div class="section-header">
+        <h2>Why not an in-browser converter?</h2>
+        <p>We tried. Here's what every in-browser approach gets wrong.</p>
+      </div>
+
+      <div class="compare">
+        <div class="compare-col">
+          <div class="compare-header bad">
+            <span class="compare-dot bad"></span>
+            Typical browser-only extension
+          </div>
+          <div class="compare-body">
+            <div class="compare-item">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#ef4444" stroke-width="1.2"/><path d="M5 10l5-5M5 5l5 5" stroke="#ef4444" stroke-width="1.3" stroke-linecap="round"/></svg>
+              PDF is a giant raster image — not searchable
+            </div>
+            <div class="compare-item">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#ef4444" stroke-width="1.2"/><path d="M5 10l5-5M5 5l5 5" stroke="#ef4444" stroke-width="1.3" stroke-linecap="round"/></svg>
+              Text overlaps across page boundaries
+            </div>
+            <div class="compare-item">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#ef4444" stroke-width="1.2"/><path d="M5 10l5-5M5 5l5 5" stroke="#ef4444" stroke-width="1.3" stroke-linecap="round"/></svg>
+              10–20 MB file for a simple article
+            </div>
+            <div class="compare-item">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#ef4444" stroke-width="1.2"/><path d="M5 10l5-5M5 5l5 5" stroke="#ef4444" stroke-width="1.3" stroke-linecap="round"/></svg>
+              DOCX has no table borders
+            </div>
+            <div class="compare-item">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#ef4444" stroke-width="1.2"/><path d="M5 10l5-5M5 5l5 5" stroke="#ef4444" stroke-width="1.3" stroke-linecap="round"/></svg>
+              Zero margin, looks nothing like a document
+            </div>
+          </div>
+        </div>
+
+        <div class="compare-col">
+          <div class="compare-header good">
+            <span class="compare-dot good"></span>
+            Bobdoc (Puppeteer backend)
+          </div>
+          <div class="compare-body">
+            <div class="compare-item" style="color:var(--text)">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#22c55e" stroke-width="1.2"/><path d="M4.5 7.5l2 2 4-4" stroke="#22c55e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Real text PDF — copy, search, zoom
+            </div>
+            <div class="compare-item" style="color:var(--text)">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#22c55e" stroke-width="1.2"/><path d="M4.5 7.5l2 2 4-4" stroke="#22c55e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Intelligent A4 page breaks
+            </div>
+            <div class="compare-item" style="color:var(--text)">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#22c55e" stroke-width="1.2"/><path d="M4.5 7.5l2 2 4-4" stroke="#22c55e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Typical PDF under 300 KB
+            </div>
+            <div class="compare-item" style="color:var(--text)">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#22c55e" stroke-width="1.2"/><path d="M4.5 7.5l2 2 4-4" stroke="#22c55e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Tables with borders and header shading
+            </div>
+            <div class="compare-item" style="color:var(--text)">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="#22c55e" stroke-width="1.2"/><path d="M4.5 7.5l2 2 4-4" stroke="#22c55e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              25mm margins, page numbers, headers
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 48px;">
+        <p style="color:var(--muted); font-size:14px; margin-bottom: 20px;">Built on proven open-source technology</p>
+        <div class="tech-pills">
+          <span class="pill">Mozilla Readability</span>
+          <span class="pill">Puppeteer</span>
+          <span class="pill">@sparticuz/chromium</span>
+          <span class="pill">docx</span>
+          <span class="pill">node-html-parser</span>
+          <span class="pill">Express</span>
+          <span class="pill">Vercel</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA ── -->
+  <div class="cta-section">
+    <h2>Ready to export anything?</h2>
+    <p>Free Chrome extension. No account required.</p>
+    <a href="https://github.com/aamsap/bobdoc/releases/latest" class="btn-primary" style="display:inline-flex;" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Download Extension
+    </a>
+  </div>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="container">
+      <div class="footer-left">
+        <div class="nav-logo-icon" style="width:22px;height:22px;border-radius:5px;">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 2h6.5L13 5.5V14H3V2z" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/><path d="M9.5 2v3.5H13" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        Bobdoc
+        <span style="color:var(--muted-2)">·</span>
+        <span style="color:var(--muted-2)">© 2026</span>
+        <span style="color:var(--muted-2)">·</span>
+        <span style="color:var(--muted-2)">Created by</span>
+        <a href="https://github.com/aamsap" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:underline;text-underline-offset:3px;">@aamsap</a>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/aamsap" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/aamsap/bobdoc/releases/latest" target="_blank" rel="noopener">Download</a>
+        <a href="/api" target="_blank" rel="noopener">API Status</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll-reveal for .fade-up elements
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+      { threshold: 0.15 }
+    );
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
