@@ -4,13 +4,12 @@
  * Walks the DOM produced by Readability and maps each element to a Word construct.
  */
 
-const { parse }  = require('node-html-parser');
+const { parse } = require('node-html-parser');
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel,
   Table, TableRow, TableCell, WidthType, BorderStyle,
-  AlignmentType, ImageRun, ExternalHyperlink,
-  UnderlineType, NumberingDefinition, LevelFormat,
-  AbstractNumbering, Numbering, convertInchesToTwip,
+  ExternalHyperlink, UnderlineType, ShadingType,
+  convertInchesToTwip,
 } = require('docx');
 
 // ─── Main entry point ────────────────────────────────────────────────────────
@@ -25,11 +24,11 @@ async function convert(html, title) {
   const children = Array.from(root.childNodes);
   const sections = [];
 
-  // Title paragraph
+  // Title paragraph — use HEADING_1, TITLE does not exist in docx@8
   sections.push(
     new Paragraph({
       text:    title,
-      heading: HeadingLevel.TITLE,
+      heading: HeadingLevel.HEADING_1,
       spacing: { after: 240 },
     })
   );
@@ -40,6 +39,27 @@ async function convert(html, title) {
   }
 
   const doc = new Document({
+    // Numbered list definition — required or any ol reference crashes Word
+    numbering: {
+      config: [
+        {
+          reference: 'default-numbering',
+          levels: [
+            {
+              level: 0,
+              format: 'decimal',
+              text:   '%1.',
+              alignment: 'left',
+              style: {
+                paragraph: {
+                  indent: { left: convertInchesToTwip(0.5), hanging: convertInchesToTwip(0.25) },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    },
     styles: {
       default: {
         document: {
@@ -71,7 +91,6 @@ async function convert(html, title) {
 
 function walkNode(node) {
   if (node.nodeType === 3) {
-    // Raw text node — wrap in a plain paragraph if non-empty
     const text = node.text.trim();
     if (!text) return [];
     return [new Paragraph({ children: [new TextRun(text)] })];
@@ -98,7 +117,7 @@ function walkNode(node) {
     case 'hr':
       return [
         new Paragraph({
-          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'AAAAAA' } },
+          border:  { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'AAAAAA' } },
           spacing: { before: 160, after: 160 },
         }),
       ];
@@ -106,9 +125,9 @@ function walkNode(node) {
     case 'blockquote':
       return [
         new Paragraph({
-          children:  inlineRuns(node),
-          indent:    { left: convertInchesToTwip(0.5) },
-          spacing:   { before: 120, after: 120 },
+          children: inlineRuns(node),
+          indent:   { left: convertInchesToTwip(0.5) },
+          spacing:  { before: 120, after: 120 },
           border: {
             left: { style: BorderStyle.SINGLE, size: 12, color: 'BBBBBB', space: 8 },
           },
@@ -128,7 +147,7 @@ function walkNode(node) {
         new Paragraph({
           children: [new TextRun({ text, font: 'Courier New', size: 20 })],
           spacing:  { before: 120, after: 120 },
-          shading:  { fill: 'F5F5F5' },
+          shading:  { type: ShadingType.SOLID, fill: 'F5F5F5', color: 'F5F5F5' },
           indent:   { left: convertInchesToTwip(0.25) },
         }),
       ];
@@ -139,15 +158,11 @@ function walkNode(node) {
 
     case 'figure': {
       const results = [];
-      for (const child of node.childNodes) {
-        results.push(...walkNode(child));
-      }
+      for (const child of node.childNodes) results.push(...walkNode(child));
       return results;
     }
 
     case 'img':
-      // Images are skipped (fetching binary data server-side from an arbitrary URL
-      // requires an extra HTTP fetch and CORS handling — see README for image support)
       return [];
 
     case 'a':
@@ -161,10 +176,8 @@ function walkNode(node) {
     case 'del':
     case 'sup':
     case 'sub':
-      // Inline elements encountered at block level — wrap in paragraph
       return [new Paragraph({ children: inlineRuns(node) })];
 
-    // Block containers — recurse
     case 'div':
     case 'section':
     case 'article':
@@ -176,18 +189,13 @@ function walkNode(node) {
     case 'details':
     case 'summary': {
       const results = [];
-      for (const child of node.childNodes) {
-        results.push(...walkNode(child));
-      }
+      for (const child of node.childNodes) results.push(...walkNode(child));
       return results;
     }
 
     default: {
-      // Unknown — recurse into children
       const results = [];
-      for (const child of node.childNodes) {
-        results.push(...walkNode(child));
-      }
+      for (const child of node.childNodes) results.push(...walkNode(child));
       return results;
     }
   }
@@ -212,20 +220,17 @@ function paragraph(node) {
 
 function listItems(listNode, ordered) {
   const items = [];
-  let counter = 1;
 
   for (const child of listNode.childNodes) {
     if (child.tagName?.toLowerCase() !== 'li') continue;
 
     items.push(
       new Paragraph({
-        children: inlineRuns(child),
-        bullet:   ordered ? undefined : { level: 0 },
-        numbering: ordered
-          ? { reference: 'default-numbering', level: 0, instance: counter++ }
-          : undefined,
-        spacing: { after: 60 },
-        indent:  { left: convertInchesToTwip(0.5), hanging: convertInchesToTwip(0.25) },
+        children:  inlineRuns(child),
+        // bullet handles unordered; numbering handles ordered
+        bullet:    ordered ? undefined : { level: 0 },
+        numbering: ordered ? { reference: 'default-numbering', level: 0 } : undefined,
+        spacing:   { after: 60 },
       })
     );
   }
@@ -252,15 +257,15 @@ function buildTable(tableNode) {
   if (rows.length === 0) return new Paragraph({});
 
   return new Table({
-    width:  { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 100, type: WidthType.PERCENTAGE },
     rows,
     borders: {
-      top:           { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
-      bottom:        { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
-      left:          { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
-      right:         { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
-      insideH:       { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
-      insideV:       { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
+      top:     { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+      bottom:  { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+      left:    { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+      right:   { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+      insideH: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
+      insideV: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
     },
   });
 }
@@ -280,13 +285,10 @@ function buildRow(rowNode, isHeader) {
             spacing:  { after: 0 },
           }),
         ],
-        shading: isHeader || tag === 'th' ? { fill: 'F0F0F0' } : undefined,
-        margins: {
-          top:    100,
-          bottom: 100,
-          left:   140,
-          right:  140,
-        },
+        shading: (isHeader || tag === 'th')
+          ? { type: ShadingType.SOLID, fill: 'F0F0F0', color: 'F0F0F0' }
+          : undefined,
+        margins: { top: 100, bottom: 100, left: 140, right: 140 },
       })
     );
   }
@@ -296,15 +298,11 @@ function buildRow(rowNode, isHeader) {
 
 // ─── Inline helpers ───────────────────────────────────────────────────────────
 
-/**
- * Recursively converts inline HTML nodes into docx TextRun / ExternalHyperlink objects.
- */
 function inlineRuns(node, opts = {}) {
   const runs = [];
 
   for (const child of node.childNodes) {
     if (child.nodeType === 3) {
-      // Text node
       const text = child.text;
       if (!text) continue;
       runs.push(new TextRun({ text, ...opts }));
@@ -337,7 +335,13 @@ function inlineRuns(node, opts = {}) {
 
       case 'code': {
         const text = child.text;
-        runs.push(new TextRun({ text, font: 'Courier New', size: 20, shading: { fill: 'F0F0F0' }, ...opts }));
+        runs.push(new TextRun({
+          text,
+          font:    'Courier New',
+          size:    20,
+          shading: { type: ShadingType.SOLID, fill: 'F0F0F0', color: 'F0F0F0' },
+          ...opts,
+        }));
         break;
       }
 
@@ -354,8 +358,12 @@ function inlineRuns(node, opts = {}) {
         break;
 
       case 'a': {
-        const href = child.getAttribute('href');
-        const inner = inlineRuns(child, { ...opts, color: '1A56DB', underline: { type: UnderlineType.SINGLE } });
+        const href  = child.getAttribute('href');
+        const inner = inlineRuns(child, {
+          ...opts,
+          color:     '1A56DB',
+          underline: { type: UnderlineType.SINGLE },
+        });
         if (href && href.startsWith('http')) {
           runs.push(new ExternalHyperlink({ link: href, children: inner }));
         } else {
@@ -365,7 +373,6 @@ function inlineRuns(node, opts = {}) {
       }
 
       case 'img':
-        // Skip inline images (same reason as block-level)
         break;
 
       default:
