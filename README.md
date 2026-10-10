@@ -163,14 +163,12 @@ when you click an export button.
 
 ## Known limitations
 
-- **Images are not included in DOCX exports** yet (`<img>` is skipped in `docx.js`). PDFs include them when the image URL is publicly reachable.
-- **Nested lists are flattened** in DOCX, and numbered lists share one counter, so a second `<ol>` keeps
-  counting from where the first ended.
-- DOCX output has no header or page numbers, unlike the PDF.
-- PDF page size is fixed to A4; there is no US Letter option.
-- Readability works best on article-style pages. Web apps, dashboards and pages behind heavy client-side
-  rendering may fail with "Could not extract readable content".
-- PDF export cold starts on Vercel can take a few seconds while Chromium is downloaded.
+- **Images in DOCX** are fetched and embedded when the URL is publicly reachable; images behind authentication, private networks, or with strict CORS policies will be silently skipped.
+- **Nested lists** beyond 9 levels deep are clamped to level 9 (edge case).
+- DOCX images use fixed 400×300 pt dimensions — aspect ratio is preserved by Word on open, but very tall or very wide images may need manual resizing.
+- PDF page size is fixed to A4; there is no US Letter option yet.
+- Readability works best on article-style pages. Web apps, dashboards, and pages behind heavy client-side rendering may return "No article content found".
+- PDF export cold starts on Vercel can take a few seconds while Chromium is initialised.
 
 ## Roadmap
 
@@ -183,29 +181,28 @@ when you click an export button.
 - [x] **Source attribution:** page URL and export date inserted under the title in DOCX.
 - [x] **Clearer errors:** user-friendly messages for unsupported pages, network failures, timeouts and oversized pages.
 
-### Phase 2: Repo and reliability
+### Phase 2: Repo and reliability ✓
 
-- [ ] Stop committing `backend/node_modules/` and test output files (`*.pdf`, `*.docx` in `backend/`); extend
-      `.gitignore`.
-- [ ] Add a `LICENSE` file.
-- [ ] Unit tests for the HTML → DOCX mapping, plus snapshot tests for PDF and DOCX output.
-- [ ] GitHub Actions CI: lint, tests, and building `bobdoc-extension.zip` from `chrome-extension/`.
-- [ ] Backend hardening: rate limiting, a request timeout, tighter CORS (extension origin only), and rendering
-      PDFs with JavaScript disabled and requests to private network addresses blocked.
+- [x] `backend/node_modules/` and test output files excluded via root `.gitignore`.
+- [x] MIT `LICENSE` file added.
+- [x] GitHub Actions CI: syntax check, health-endpoint smoke test, and `bobdoc-extension.zip` artifact on every push.
+- [x] Backend hardening: rate limiting (30 req/min per IP), 55 s conversion timeout (returns `504`), configurable `ALLOWED_ORIGINS` for tighter CORS, and Puppeteer launched with `--disable-javascript` and `--block-new-web-contents`.
+- [x] Unit tests for the HTML → DOCX mapping (45 tests, 0 failures — run with `npm test` in `backend/`).
 
-### Phase 3: Features
+### Phase 3: Features ✓
 
-- [ ] **Export options in the popup:** page size (A4 / Letter), font (serif / sans), include images on/off.
-- [ ] **Export a selection** instead of the whole article.
-- [ ] **Right-click menu and keyboard shortcut** for one-step export.
-- [ ] **More formats:** Markdown and plain text, which can run entirely in the browser.
-- [ ] **Preview before download** so users can check the extraction.
+- [x] **Export options in the popup:** page size (A4 / Letter), font (sans / serif / mono), include images toggle — options persisted via `chrome.storage.local`.
+- [x] **Export a selection** — toggle "Selection only" in the popup or right-click highlighted text to export just what you selected.
+- [x] **Right-click context menu** (`Export with Bobdoc → DOCX / PDF / MD / TXT`) and **keyboard shortcuts** (`Alt+Shift+D` for DOCX, `Alt+Shift+P` for PDF), powered by a background service worker.
+- [x] **More formats:** Markdown (`.md`) and plain text (`.txt`) export run entirely in the browser — no backend needed.
+- [x] **Preview before download** — click the "Preview" tab in the popup to see the extracted article text before exporting.
 
 ### Phase 4: Distribution
 
 - [ ] Publish to the **Chrome Web Store**.
 - [ ] Port to **Microsoft Edge** and **Firefox** (WebExtensions).
-- [ ] Landing page: demo GIF, before/after samples and an FAQ.
+- [x] Landing page live at [bobdoc.vercel.app](https://bobdoc.vercel.app) with docs, feature comparison, and download CTA.
+- [ ] Demo GIF, before/after sample exports, and an FAQ on the landing page.
 
 Have an idea or found a page that doesn't export well? Open an issue with the URL and what you expected.
 

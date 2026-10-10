@@ -1,35 +1,80 @@
-const btnDocx = document.getElementById('btnDocx');
-const btnPdf  = document.getElementById('btnPdf');
-const status  = document.getElementById('status');
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const btnDocx    = document.getElementById('btnDocx');
+const btnPdf     = document.getElementById('btnPdf');
+const btnMd      = document.getElementById('btnMd');
+const btnTxt     = document.getElementById('btnTxt');
+const status     = document.getElementById('status');
+const previewBox = document.getElementById('previewBox');
+const tabExport  = document.getElementById('tabExport');
+const tabPreview = document.getElementById('tabPreview');
 
-// Store original inner HTML so we can restore it after loading
+const optPageSize  = document.getElementById('optPageSize');
+const optFont      = document.getElementById('optFont');
+const optImages    = document.getElementById('optImages');
+const optSelection = document.getElementById('optSelection');
+
+// Snapshot original button HTML for restore-after-loading
 const originalHtml = {
   docx: btnDocx.innerHTML,
   pdf:  btnPdf.innerHTML,
+  md:   btnMd.innerHTML,
+  txt:  btnTxt.innerHTML,
 };
 
-const SPINNER_HTML = '<span class="spinner"></span>';
+const ALL_BTNS = [btnDocx, btnPdf, btnMd, btnTxt];
 
+// ── Persist options via chrome.storage.local ──────────────────────────────────
+async function loadOptions() {
+  const saved = await chrome.storage.local.get(['pageSize', 'font', 'images']);
+  if (saved.pageSize) optPageSize.value = saved.pageSize;
+  if (saved.font)     optFont.value     = saved.font;
+  if (saved.images !== undefined) optImages.checked = saved.images;
+}
+
+function saveOptions() {
+  chrome.storage.local.set({
+    pageSize: optPageSize.value,
+    font:     optFont.value,
+    images:   optImages.checked,
+  });
+}
+
+optPageSize.addEventListener('change', saveOptions);
+optFont.addEventListener('change', saveOptions);
+optImages.addEventListener('change', saveOptions);
+
+loadOptions();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function setStatus(msg, type = '') {
   status.textContent = msg;
-  status.className = type;
+  status.className   = type;
 }
 
 function setLoading(on, activeBtn) {
-  btnDocx.disabled = on;
-  btnPdf.disabled  = on;
+  ALL_BTNS.forEach(b => { b.disabled = on; });
 
   if (on) {
-    // Show spinner only on the clicked button; grey out the other
-    activeBtn.innerHTML = SPINNER_HTML + ' ' + (activeBtn === btnDocx ? 'Exporting…' : 'Exporting…');
+    activeBtn.innerHTML = '<span class="spinner"></span> Exporting…';
   } else {
-    // Restore both buttons
     btnDocx.innerHTML = originalHtml.docx;
     btnPdf.innerHTML  = originalHtml.pdf;
+    btnMd.innerHTML   = originalHtml.md;
+    btnTxt.innerHTML  = originalHtml.txt;
     setStatus('');
   }
 }
 
+function getOptions() {
+  return {
+    pageSize:      optPageSize.value,
+    font:          optFont.value,
+    includeImages: optImages.checked,
+    selectionOnly: optSelection.checked,
+  };
+}
+
+// ── Message sender ────────────────────────────────────────────────────────────
 async function sendMessage(action, btn) {
   setLoading(true, btn);
   setStatus('Extracting content…');
@@ -37,7 +82,7 @@ async function sendMessage(action, btn) {
   let tabs;
   try {
     tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  } catch (e) {
+  } catch {
     setStatus('Could not access the current tab.', 'error');
     setLoading(false, btn);
     return;
@@ -51,19 +96,57 @@ async function sendMessage(action, btn) {
   }
 
   try {
-    const response = await chrome.tabs.sendMessage(tabId, { action });
+    const response = await chrome.tabs.sendMessage(tabId, { action, options: getOptions() });
 
     if (response?.success) {
       setStatus('Done! File downloaded.', 'success');
     } else {
       setStatus(response?.error || 'Something went wrong.', 'error');
     }
-  } catch (e) {
+  } catch {
     setStatus('Cannot extract content from this page.', 'error');
   }
 
   setLoading(false, btn);
 }
 
+// ── Export buttons ────────────────────────────────────────────────────────────
 btnDocx.addEventListener('click', () => sendMessage('exportDocx', btnDocx));
 btnPdf.addEventListener('click',  () => sendMessage('exportPdf',  btnPdf));
+btnMd.addEventListener('click',   () => sendMessage('exportMd',   btnMd));
+btnTxt.addEventListener('click',  () => sendMessage('exportTxt',  btnTxt));
+
+// ── Preview tab ───────────────────────────────────────────────────────────────
+tabPreview.addEventListener('click', async () => {
+  tabPreview.classList.add('active');
+  tabExport.classList.remove('active');
+  previewBox.classList.add('visible');
+
+  previewBox.innerHTML = '<em style="color:#555">Loading…</em>';
+
+  let tabs;
+  try {
+    tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabId = tabs[0]?.id;
+    if (!tabId) throw new Error('no tab');
+
+    const response = await chrome.tabs.sendMessage(tabId, {
+      action:  'getPreview',
+      options: getOptions(),
+    });
+
+    if (response?.success && response.html) {
+      previewBox.innerHTML = response.html;
+    } else {
+      previewBox.innerHTML = `<em style="color:#f87171">${response?.error || 'Could not extract content.'}</em>`;
+    }
+  } catch {
+    previewBox.innerHTML = '<em style="color:#f87171">Cannot read this page.</em>';
+  }
+});
+
+tabExport.addEventListener('click', () => {
+  tabExport.classList.add('active');
+  tabPreview.classList.remove('active');
+  previewBox.classList.remove('visible');
+});

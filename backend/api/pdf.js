@@ -36,17 +36,24 @@ async function getBrowser() {
   return puppeteer.launch({
     executablePath,
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-javascript',             // article HTML needs no JS
+      '--block-new-web-contents',         // no popups
+      '--disable-web-security',           // needed for data: URIs in local dev
+    ],
   });
 }
 
 /**
- * @param {string} html   Clean article HTML (from Readability)
- * @param {string} title  Document title
+ * @param {string} html       Clean article HTML (from Readability)
+ * @param {string} title      Document title
+ * @param {object} [opts]     { pageSize?: 'A4'|'Letter', font?: 'sans'|'serif'|'mono' }
  * @returns {Promise<Buffer>} PDF binary buffer
  */
-async function convert(html, title) {
-  const fullHtml = buildHtml(title, html);
+async function convert(html, title, opts = {}) {
+  const fullHtml = buildHtml(title, html, opts.font || 'sans');
   const browser  = await getBrowser();
 
   try {
@@ -55,7 +62,7 @@ async function convert(html, title) {
     await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
 
     const buffer = await page.pdf({
-      format: 'A4',
+      format: opts.pageSize === 'Letter' ? 'Letter' : 'A4',
       printBackground: false,
       margin: {
         top:    '25mm',
@@ -80,7 +87,14 @@ async function convert(html, title) {
   }
 }
 
-function buildHtml(title, body) {
+const FONT_STACK = {
+  sans:  '"Calibri", "Arial", sans-serif',
+  serif: '"Georgia", "Times New Roman", serif',
+  mono:  '"Courier New", "Courier", monospace',
+};
+
+function buildHtml(title, body, font = 'sans') {
+  const fontFamily = FONT_STACK[font] || FONT_STACK.sans;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,7 +104,7 @@ function buildHtml(title, body) {
     *, *::before, *::after { box-sizing: border-box; }
 
     body {
-      font-family: "Georgia", serif;
+      font-family: ${fontFamily};
       font-size: 11.5pt;
       line-height: 1.75;
       color: #1a1a1a;

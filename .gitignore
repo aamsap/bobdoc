@@ -1,0 +1,27 @@
+﻿# ── Dependencies ──────────────────────────────────────────────────────────────
+backend/node_modules/
+
+# ── Vercel ─────────────────────────────────────────────────────────────────────
+backend/.vercel
+.vercel
+
+# ── Test / dev output files ────────────────────────────────────────────────────
+backend/*.pdf
+backend/*.docx
+*.pdf
+*.docx
+
+# ── Packaged extension (build artifact — regenerate with the CI workflow) ──────
+bobdoc-extension.zip
+
+# ── Environment ───────────────────────────────────────────────────────────────
+.env
+.env.local
+backend/.env
+
+# ── OS & editor noise ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

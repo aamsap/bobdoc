@@ -8,13 +8,24 @@
   },
   "scripts": {
     "dev": "node api/index.js",
-    "start": "node api/index.js"
+    "start": "node api/index.js",
+    "test": "jest tests/ --forceExit"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 15000
   },
   "dependencies": {
     "@sparticuz/chromium-min": "^131.0.1",
     "docx": "^8.5.0",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.4.0",
     "node-html-parser": "^6.1.13",
     "puppeteer-core": "^23.6.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.5.2",
+    "jest": "^30.5.2",
+    "supertest": "^7.3.1"
   }
 }

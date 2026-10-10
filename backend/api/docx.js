@@ -35,12 +35,14 @@ const IMG_MAX_WIDTH_EMU = 5_486_400; // ~6 inches at 914400 EMU/inch
  * @param {string} [sourceUrl] Original page URL for attribution
  * @returns {Promise<Buffer>} DOCX binary buffer
  */
-async function convert(html, title, sourceUrl) {
+async function convert(html, title, sourceUrl, opts = {}) {
   const root     = parse(html);
   const children = Array.from(root.childNodes);
 
-  // Pre-fetch all images in parallel so walkNode can be synchronous
-  const imgMap = await prefetchImages(root);
+  // Pre-fetch all images unless the user disabled them
+  const imgMap = (opts.includeImages !== false)
+    ? await prefetchImages(root)
+    : new Map();
 
   // Numbering state — one entry per list encountered (supports restarts)
   const numberingState = { configs: [], counter: 0 };

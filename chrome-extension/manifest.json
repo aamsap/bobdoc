@@ -1,12 +1,25 @@
 {
   "manifest_version": 3,
   "name": "Bobdoc",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Tired of copy-pasting articles with broken formatting? One click exports any webpage to a clean, properly formatted DOCX or PDF.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "commands": {
+    "export-docx": {
+      "suggested_key": { "default": "Alt+Shift+D" },
+      "description": "Export page as DOCX"
+    },
+    "export-pdf": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Export page as PDF"
+    }
+  },
   "host_permissions": [
     "https://bobdoc.vercel.app/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
