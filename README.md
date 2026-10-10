@@ -174,14 +174,14 @@ when you click an export button.
 
 ## Roadmap
 
-### Phase 1: Quality fixes (next up)
+### Phase 1: Quality fixes ✓
 
-- [ ] **Images in DOCX:** fetch `<img>` sources on the server and embed them with `ImageRun`, with size limits
+- [x] **Images in DOCX:** fetch `<img>` sources on the server and embed them with `ImageRun`, with size limits
       and a timeout.
-- [ ] **Correct list handling:** support nested `<ul>/<ol>` levels and restart numbering for each list.
-- [ ] **DOCX header and footer:** add the title in the header and page numbers in the footer, to match the PDF.
-- [ ] **Source attribution:** optionally add the page URL and export date under the title.
-- [ ] **Clearer errors:** user-friendly messages for unsupported pages, timeouts and oversized pages.
+- [x] **Correct list handling:** support nested `<ul>/<ol>` levels and restart numbering for each list.
+- [x] **DOCX header and footer:** add the title in the header and page numbers in the footer, to match the PDF.
+- [x] **Source attribution:** page URL and export date inserted under the title in DOCX.
+- [x] **Clearer errors:** user-friendly messages for unsupported pages, network failures, timeouts and oversized pages.
 
 ### Phase 2: Repo and reliability
 

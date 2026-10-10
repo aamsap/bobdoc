@@ -48,11 +48,11 @@ app.post('/api/convert/pdf', async (req, res) => {
 // Body: { html: string, title: string }
 // Returns: application/vnd.openxmlformats-officedocument.wordprocessingml.document
 app.post('/api/convert/docx', async (req, res) => {
-  const { html, title } = req.body;
+  const { html, title, sourceUrl } = req.body;
   if (!html) return res.status(400).json({ error: 'html is required' });
 
   try {
-    const buffer = await docx.convert(html, title || 'document');
+    const buffer = await docx.convert(html, title || 'document', sourceUrl);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitize(title)}.docx"`);
     res.setHeader('Content-Length', buffer.length);
