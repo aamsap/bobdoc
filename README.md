@@ -14,7 +14,7 @@
   <a href="https://bobdoc.vercel.app">Website</a> ·
   <a href="#getting-started">Getting started</a> ·
   <a href="#how-it-works">How it works</a> ·
-  <a href="#roadmap">Roadmap</a>
+  <a href="#improvement-recommendations">Improvement recommendations</a>
 </p>
 
 ---
@@ -170,41 +170,39 @@ when you click an export button.
 - Readability works best on article-style pages. Web apps, dashboards, and pages behind heavy client-side rendering may return "No article content found".
 - PDF export cold starts on Vercel can take a few seconds while Chromium is initialised.
 
-## Roadmap
+## Improvement recommendations
 
-### Phase 1: Quality fixes ✓
+The core feature set is complete and working. The following areas are worth addressing before or shortly after a Chrome Web Store submission.
 
-- [x] **Images in DOCX:** fetch `<img>` sources on the server and embed them with `ImageRun`, with size limits
-      and a timeout.
-- [x] **Correct list handling:** support nested `<ul>/<ol>` levels and restart numbering for each list.
-- [x] **DOCX header and footer:** add the title in the header and page numbers in the footer, to match the PDF.
-- [x] **Source attribution:** page URL and export date inserted under the title in DOCX.
-- [x] **Clearer errors:** user-friendly messages for unsupported pages, network failures, timeouts and oversized pages.
+### Distribution
 
-### Phase 2: Repo and reliability ✓
+- **Publish to the Chrome Web Store.** The extension is fully functional; store listing copy, screenshots, and a privacy policy are the remaining prerequisites.
+- **Firefox / Edge port.** The extension already uses standard WebExtensions APIs. The main change needed is swapping `chrome.*` calls to `browser.*` (or using a polyfill) and testing the manifest.
 
-- [x] `backend/node_modules/` and test output files excluded via root `.gitignore`.
-- [x] MIT `LICENSE` file added.
-- [x] GitHub Actions CI: syntax check, health-endpoint smoke test, and `bobdoc-extension.zip` artifact on every push.
-- [x] Backend hardening: rate limiting (30 req/min per IP), 55 s conversion timeout (returns `504`), configurable `ALLOWED_ORIGINS` for tighter CORS, and Puppeteer launched with `--disable-javascript` and `--block-new-web-contents`.
-- [x] Unit tests for the HTML → DOCX mapping (45 tests, 0 failures — run with `npm test` in `backend/`).
+### Documentation & discoverability
 
-### Phase 3: Features ✓
+- **Demo GIF or video** in the README and on the landing page showing a real before/after export — the single fastest way to communicate the value proposition.
+- **Before/after sample exports** (a `.docx` and `.pdf` next to the source article) so potential users can evaluate output quality without installing.
+- **FAQ section** on the landing page covering the most common friction points: "why does it say no article found?", "are images sent to your server?", "can I self-host?".
 
-- [x] **Export options in the popup:** page size (A4 / Letter), font (sans / serif / mono), include images toggle — options persisted via `chrome.storage.local`.
-- [x] **Export a selection** — toggle "Selection only" in the popup or right-click highlighted text to export just what you selected.
-- [x] **Right-click context menu** (`Export with Bobdoc → DOCX / PDF / MD / TXT`) and **keyboard shortcuts** (`Alt+Shift+D` for DOCX, `Alt+Shift+P` for PDF), powered by a background service worker.
-- [x] **More formats:** Markdown (`.md`) and plain text (`.txt`) export run entirely in the browser — no backend needed.
-- [x] **Preview before download** — click the "Preview" tab in the popup to see the extracted article text before exporting.
+### User experience
 
-### Phase 4: Distribution
+- **Error recovery in the popup.** Currently a failed export leaves the buttons disabled until the user re-opens the popup. Consider resetting to the idle state automatically after ~3 s so the user can adjust options and retry without reopening.
+- **Progress feedback for large articles.** The popup shows "Exporting…" but gives no indication of how far along a slow PDF render is. Even a simple elapsed-seconds counter would reduce perceived wait time.
+- **DOCX image dimensions.** Images are currently clamped to a fixed 400 × 300 pt bounding box. Preserving the original aspect ratio server-side (by reading image metadata before embedding) would improve output quality, especially for tall infographics and narrow screenshots.
 
-- [ ] Publish to the **Chrome Web Store**.
-- [ ] Port to **Microsoft Edge** and **Firefox** (WebExtensions).
-- [x] Landing page live at [bobdoc.vercel.app](https://bobdoc.vercel.app) with docs, feature comparison, and download CTA.
-- [ ] Demo GIF, before/after sample exports, and an FAQ on the landing page.
+### Backend & reliability
 
-Have an idea or found a page that doesn't export well? Open an issue with the URL and what you expected.
+- **Chromium version pin.** `pdf.js` downloads the Chromium tarball from a hard-coded GitHub release URL at runtime. Pin the URL in an environment variable (or a constants file) so an upgrade is a one-line change and the URL is easy to audit.
+- **Structured logging.** The current `console.error('[pdf]', err.message)` pattern works but loses context in Vercel logs. Adding a request ID (e.g. a short UUID per conversion request) to each log line would make debugging production errors significantly faster.
+- **`package.json` name field.** The backend `name` is still `"page-to-doc-backend"` — updating it to `"bobdoc-backend"` keeps things consistent with the project name.
+
+### Testing
+
+- **Integration test for PDF output.** The test suite covers the DOCX converter thoroughly (45 tests) but the PDF path has no automated test. Even a single smoke test that asserts the endpoint returns a non-empty `application/pdf` buffer with status 200 would catch regressions.
+- **Selection-mode edge cases.** The `selectionOnly` path in `content.js` is not covered by any test. A unit test for `extractContent(true)` with a mock `window.getSelection()` would prevent silent regressions there.
+
+Have a suggestion or found a page that doesn't export cleanly? Open an issue with the URL and what you expected.
 
 ## Contributing
 
