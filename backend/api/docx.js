@@ -17,15 +17,14 @@ const {
   Document, Packer, Paragraph, TextRun, HeadingLevel,
   Table, TableRow, TableCell, WidthType, BorderStyle,
   ExternalHyperlink, UnderlineType, ShadingType, ImageRun,
-  AlignmentType, Header, Footer, PageNumber, NumberFormat,
+  AlignmentType, Header, Footer, PageNumber,
   convertInchesToTwip,
 } = require('docx');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const IMG_MAX_BYTES    = 2 * 1024 * 1024; // 2 MB per image
-const IMG_TIMEOUT_MS   = 5_000;
-const IMG_MAX_WIDTH_EMU = 5_486_400; // ~6 inches at 914400 EMU/inch
+const IMG_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB per image
+const IMG_TIMEOUT_MS = 5_000;
 
 // ─── Main entry point ────────────────────────────────────────────────────────
 
@@ -167,14 +166,26 @@ async function prefetchImages(root) {
   return new Map(entries);
 }
 
-function fetchWithLimit(url, maxBytes, timeoutMs) {
+function fetchWithLimit(url, maxBytes, timeoutMs, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
-    const lib     = url.startsWith('https') ? https : http;
-    const timer   = setTimeout(() => { req.destroy(); reject(new Error('timeout')); }, timeoutMs);
-    let received  = 0;
-    const chunks  = [];
+    const lib    = url.startsWith('https') ? https : http;
+    const timer  = setTimeout(() => { req.destroy(); reject(new Error('timeout')); }, timeoutMs);
+    let received = 0;
+    const chunks = [];
 
     const req = lib.get(url, res => {
+      // Follow redirects (301, 302, 303, 307, 308)
+      if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+        clearTimeout(timer);
+        const location = res.headers['location'];
+        if (!location || redirectsLeft <= 0) {
+          reject(new Error(`Too many redirects or missing Location for ${url}`));
+          return;
+        }
+        const next = new URL(location, url).href;
+        fetchWithLimit(next, maxBytes, timeoutMs, redirectsLeft - 1).then(resolve, reject);
+        return;
+      }
       if (res.statusCode !== 200) {
         clearTimeout(timer);
         reject(new Error(`HTTP ${res.statusCode}`));
@@ -208,6 +219,44 @@ function detectMime(buf) {
   if (buf[0] === 0x47 && buf[1] === 0x49) return 'image/gif';
   if (buf[0] === 0x52 && buf[1] === 0x49) return 'image/webp';
   return 'image/png'; // fallback
+}
+
+/**
+ * Read pixel dimensions from a PNG or JPEG buffer without a library.
+ * Returns { width, height } in pixels, or null if unreadable.
+ *
+ * PNG:  IHDR chunk starts at byte 16; width = bytes 16-19, height = bytes 20-23.
+ * JPEG: scan forward for an SOFn marker (0xFF 0xC0..0xC3) whose payload
+ *       contains height at offset +3 and width at offset +5.
+ */
+function readImageDimensions(buf) {
+  try {
+    // PNG
+    if (buf[0] === 0x89 && buf[1] === 0x50) {
+      return {
+        width:  buf.readUInt32BE(16),
+        height: buf.readUInt32BE(20),
+      };
+    }
+    // JPEG
+    if (buf[0] === 0xFF && buf[1] === 0xD8) {
+      let i = 2;
+      while (i < buf.length - 8) {
+        if (buf[i] !== 0xFF) break;
+        const marker = buf[i + 1];
+        const len    = buf.readUInt16BE(i + 2);
+        // SOF0–SOF3 markers contain image dimensions
+        if (marker >= 0xC0 && marker <= 0xC3) {
+          return {
+            height: buf.readUInt16BE(i + 5),
+            width:  buf.readUInt16BE(i + 7),
+          };
+        }
+        i += 2 + len;
+      }
+    }
+  } catch { /* truncated buffer — fall through */ }
+  return null;
 }
 
 // ─── Numbering helper ─────────────────────────────────────────────────────────
@@ -252,12 +301,13 @@ function walkNode(node, imgMap, numberingState, depth) {
   const tag = node.tagName?.toLowerCase();
 
   switch (tag) {
-    case 'h1': return [heading(node, HeadingLevel.HEADING_1)];
-    case 'h2': return [heading(node, HeadingLevel.HEADING_2)];
-    case 'h3': return [heading(node, HeadingLevel.HEADING_3)];
-    case 'h4': return [heading(node, HeadingLevel.HEADING_4)];
+    // Bug 8: pass imgMap so headings with inline images work
+    case 'h1': return [heading(node, HeadingLevel.HEADING_1, imgMap)];
+    case 'h2': return [heading(node, HeadingLevel.HEADING_2, imgMap)];
+    case 'h3': return [heading(node, HeadingLevel.HEADING_3, imgMap)];
+    case 'h4': return [heading(node, HeadingLevel.HEADING_4, imgMap)];
     case 'h5':
-    case 'h6': return [heading(node, HeadingLevel.HEADING_5)];
+    case 'h6': return [heading(node, HeadingLevel.HEADING_5, imgMap)];
 
     case 'p':
       return [paragraph(node, imgMap)];
@@ -354,9 +404,10 @@ function walkNode(node, imgMap, numberingState, depth) {
 
 // ─── Block helpers ────────────────────────────────────────────────────────────
 
-function heading(node, level) {
+// Bug 8: accept imgMap so inline images inside headings are rendered
+function heading(node, level, imgMap = new Map()) {
   return new Paragraph({
-    children: inlineRuns(node, {}, new Map()),
+    children: inlineRuns(node, {}, imgMap),
     heading:  level,
     spacing:  { before: 240, after: 100 },
   });
@@ -369,6 +420,9 @@ function paragraph(node, imgMap) {
   });
 }
 
+// Max image width: ~6 inches at 96 dpi (fits inside 1.25-inch margins on A4)
+const IMG_MAX_PX_WIDTH = 576;
+
 function buildImgParagraph(node, imgMap) {
   const src = node.getAttribute('src');
   if (!src) return [];
@@ -376,12 +430,24 @@ function buildImgParagraph(node, imgMap) {
   if (!buf) return [];
 
   try {
-    // Scale to max width while preserving aspect ratio
     const altText = node.getAttribute('alt') || '';
+
+    // Read real pixel dimensions so Word renders the image at the correct aspect ratio.
+    // Fall back to a safe default if the format is unrecognised (GIF, WebP, etc.).
+    const dims = readImageDimensions(buf);
+    let w = dims ? dims.width  : IMG_MAX_PX_WIDTH;
+    let h = dims ? dims.height : Math.round(IMG_MAX_PX_WIDTH * 0.5625); // 16:9 fallback
+
+    // Clamp to max width while preserving aspect ratio
+    if (w > IMG_MAX_PX_WIDTH) {
+      h = Math.round(h * IMG_MAX_PX_WIDTH / w);
+      w = IMG_MAX_PX_WIDTH;
+    }
+
     const run = new ImageRun({
-      data:          buf,
-      transformation: { width: 400, height: 300 }, // word will auto-scale with correct OOXML
-      altText:       { title: altText, description: altText, name: altText },
+      data:           buf,
+      transformation: { width: w, height: h },
+      altText:        { title: altText, description: altText, name: altText },
     });
     return [
       new Paragraph({
@@ -574,14 +640,21 @@ function inlineRuns(node, opts, imgMap) {
       }
 
       case 'img': {
-        // Inline image inside a paragraph — embed if available
+        // Bug 7: apply readImageDimensions to inline images just like block images
         const src = child.getAttribute('src');
         const buf = src && imgMap ? imgMap.get(src) : null;
         if (buf) {
           try {
+            const dims = readImageDimensions(buf);
+            let w = dims ? dims.width  : IMG_MAX_PX_WIDTH;
+            let h = dims ? dims.height : Math.round(IMG_MAX_PX_WIDTH * 0.5625);
+            if (w > IMG_MAX_PX_WIDTH) {
+              h = Math.round(h * IMG_MAX_PX_WIDTH / w);
+              w = IMG_MAX_PX_WIDTH;
+            }
             runs.push(new ImageRun({
               data:           buf,
-              transformation: { width: 300, height: 200 },
+              transformation: { width: w, height: h },
             }));
           } catch { /* skip on error */ }
         }

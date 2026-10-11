@@ -15,6 +15,97 @@ const BACKEND_URL = 'https://bobdoc.vercel.app';
 
 // ─── Content extraction ───────────────────────────────────────────────────────
 
+// ─── Hero image detection ─────────────────────────────────────────────────────
+// Returns the absolute URL of the page's hero/featured image, or null if none
+// is found or if Readability already included it in the extracted content.
+
+function detectHeroImage(extractedContent) {
+  // 1. Try structured meta tags — most reliable, set explicitly by the publisher
+  const metaSources = [
+    'meta[property="og:image"]',
+    'meta[name="twitter:image"]',
+    'meta[name="twitter:image:src"]',
+    'meta[itemprop="image"]',
+  ];
+  for (const sel of metaSources) {
+    const el  = document.querySelector(sel);
+    const url = el && (el.getAttribute('content') || el.getAttribute('src'));
+    if (url) {
+      const abs = resolveUrl(url);
+      if (abs && !extractedContent.includes(abs)) return abs;
+    }
+  }
+
+  // 2. Try JSON-LD structured data (schema.org Article/BlogPosting)
+  for (const el of document.querySelectorAll('script[type="application/ld+json"]')) {
+    try {
+      const data = JSON.parse(el.textContent);
+      const entries = Array.isArray(data) ? data : [data];
+      for (const entry of entries) {
+        const img = entry.image;
+        // image can be: string | ImageObject | Array<string|ImageObject>
+        const first = Array.isArray(img) ? img[0] : img;
+        const url = typeof first === 'string' ? first
+                  : first?.url               ? first.url
+                  : null;
+        if (url) {
+          const abs = resolveUrl(url);
+          if (abs && !extractedContent.includes(abs)) return abs;
+        }
+      }
+    } catch { /* malformed JSON-LD — skip */ }
+  }
+
+  // 3. Fall back to the first large <img> visible above the fold that
+  //    Readability didn't keep (heuristic: width ≥ 400px or no explicit size).
+  for (const img of document.querySelectorAll('img')) {
+    const src = img.src; // browser resolves this to an absolute URL automatically
+    if (!src || src.startsWith('data:')) continue;
+    // Skip tiny icons / avatars
+    if (img.naturalWidth  > 0 && img.naturalWidth  < 200) continue;
+    if (img.naturalHeight > 0 && img.naturalHeight < 100) continue;
+    // Skip if already present in Readability's output
+    if (extractedContent.includes(src)) continue;
+    // Only take images in the upper portion of the page
+    const rect = img.getBoundingClientRect();
+    if (rect.top > window.innerHeight * 2) continue;
+    return src;
+  }
+
+  return null;
+}
+
+/** Resolve a possibly-relative URL against the current page origin. */
+function resolveUrl(url) {
+  try {
+    return new URL(url, location.href).href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Walk all <img> tags in an HTML string and replace every src with its
+ * absolute equivalent. The browser resolves img.src automatically, so
+ * relative, protocol-relative, and absolute URLs all become https://… here.
+ *
+ * Uses a <template> element (inert, non-rendering) so the browser never
+ * fires network requests for the images while we are just resolving URLs.
+ */
+function resolveImgSrcs(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  for (const img of tpl.content.querySelectorAll('img')) {
+    // img.src on an element inside a template fragment returns the absolute URL
+    // but the browser never actually loads the image.
+    if (img.src) img.setAttribute('src', img.src);
+  }
+  // Serialize the fragment back to an HTML string via a temporary div
+  const div = document.createElement('div');
+  div.appendChild(tpl.content.cloneNode(true));
+  return div.innerHTML;
+}
+
 function extractContent(selectionOnly = false) {
   if (!document.body) throw new UserError('This page has no content to export.');
 
@@ -49,9 +140,24 @@ function extractContent(selectionOnly = false) {
     );
   }
 
+  // Fix 2: resolve every <img src> in the extracted HTML to an absolute URL.
+  // Readability preserves relative paths as-is; the backend can't resolve them
+  // because it doesn't know the page origin. We use a temporary DOM fragment so
+  // the browser does the resolution for us (img.src is always absolute).
+  const resolved = resolveImgSrcs(article.content);
+
+  // Prepend the hero image if one exists and Readability didn't include it.
+  // We try, in order: og:image → twitter:image → first prominent <img> above
+  // the article fold. The browser resolves relative URLs automatically via img.src.
+  const heroSrc = detectHeroImage(resolved);
+  const content = heroSrc
+    // Bug 4: percent-encode any " in the URL so it can't break the src attribute
+    ? `<figure class="bobdoc-hero"><img src="${heroSrc.replace(/"/g, '%22')}" alt="Hero image"/></figure>\n${resolved}`
+    : resolved;
+
   return {
     title:     article.title || document.title || 'Document',
-    content:   article.content,
+    content,
     sourceUrl: location.href,
   };
 }
@@ -86,7 +192,9 @@ function triggerDownload(blob, filename) {
 }
 
 function safeFilename(title, ext) {
-  return (title || 'document').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) + '.' + ext;
+  // Bug 3: also replace spaces so client-side filenames (MD, TXT) are
+  // consistent with the backend sanitize() which already replaces spaces.
+  return (title || 'document').replace(/[\\/:*?"<>| ]/g, '_').slice(0, 80) + '.' + ext;
 }
 
 // ─── DOCX export ──────────────────────────────────────────────────────────────

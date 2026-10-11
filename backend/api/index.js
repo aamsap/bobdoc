@@ -101,7 +101,9 @@ app.post('/api/convert/docx', async (req, res) => {
       docx.convert(html, title || 'document', sourceUrl, {
         pageSize:      req.body.pageSize,
         font:          req.body.font,
-        includeImages: req.body.includeImages !== false,
+        // Bug 5: coerce to boolean — JSON gives us a real boolean, but guard
+        // against a string "false" from a misconfigured caller.
+        includeImages: req.body.includeImages !== false && req.body.includeImages !== 'false',
       }),
       CONVERT_TIMEOUT_MS
     );

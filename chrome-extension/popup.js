@@ -25,23 +25,26 @@ const ALL_BTNS = [btnDocx, btnPdf, btnMd, btnTxt];
 
 // ── Persist options via chrome.storage.local ──────────────────────────────────
 async function loadOptions() {
-  const saved = await chrome.storage.local.get(['pageSize', 'font', 'images']);
-  if (saved.pageSize) optPageSize.value = saved.pageSize;
-  if (saved.font)     optFont.value     = saved.font;
-  if (saved.images !== undefined) optImages.checked = saved.images;
+  const saved = await chrome.storage.local.get(['pageSize', 'font', 'images', 'selection']);
+  if (saved.pageSize)              optPageSize.value  = saved.pageSize;
+  if (saved.font)                  optFont.value      = saved.font;
+  if (saved.images    !== undefined) optImages.checked    = saved.images;
+  if (saved.selection !== undefined) optSelection.checked = saved.selection; // Bug 2
 }
 
 function saveOptions() {
   chrome.storage.local.set({
-    pageSize: optPageSize.value,
-    font:     optFont.value,
-    images:   optImages.checked,
+    pageSize:  optPageSize.value,
+    font:      optFont.value,
+    images:    optImages.checked,
+    selection: optSelection.checked, // Bug 2: persist selectionOnly
   });
 }
 
 optPageSize.addEventListener('change', saveOptions);
 optFont.addEventListener('change', saveOptions);
 optImages.addEventListener('change', saveOptions);
+optSelection.addEventListener('change', saveOptions); // Bug 2: save on change
 
 loadOptions();
 
@@ -57,11 +60,13 @@ function setLoading(on, activeBtn) {
   if (on) {
     activeBtn.innerHTML = '<span class="spinner"></span> Exporting…';
   } else {
+    // Bug 1: only restore button labels — do NOT clear status here.
+    // The caller sets success/error status after the await; clearing here
+    // would race against that and wipe the message before the user sees it.
     btnDocx.innerHTML = originalHtml.docx;
     btnPdf.innerHTML  = originalHtml.pdf;
     btnMd.innerHTML   = originalHtml.md;
     btnTxt.innerHTML  = originalHtml.txt;
-    setStatus('');
   }
 }
 
@@ -85,6 +90,7 @@ async function sendMessage(action, btn) {
   } catch {
     setStatus('Could not access the current tab.', 'error');
     setLoading(false, btn);
+    setTimeout(() => setStatus(''), 4000);
     return;
   }
 
@@ -92,6 +98,7 @@ async function sendMessage(action, btn) {
   if (!tabId) {
     setStatus('No active tab found.', 'error');
     setLoading(false, btn);
+    setTimeout(() => setStatus(''), 4000);
     return;
   }
 
@@ -107,7 +114,8 @@ async function sendMessage(action, btn) {
     setStatus('Cannot extract content from this page.', 'error');
   }
 
-  setLoading(false, btn);
+  setLoading(false, btn); // Bug 1: restores buttons without wiping status
+  setTimeout(() => setStatus(''), 4000); // auto-clear after 4 s
 }
 
 // ── Export buttons ────────────────────────────────────────────────────────────

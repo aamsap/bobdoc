@@ -5,6 +5,11 @@
  */
 
 // puppeteer-core will be imported dynamically
+const https = require('https');
+const http  = require('http');
+
+const IMG_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB per image
+const IMG_TIMEOUT_MS = 5_000;
 
 // On Vercel use the serverless Chromium binary; locally fall back to a system Chrome
 async function getBrowser() {
@@ -39,7 +44,6 @@ async function getBrowser() {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-javascript',             // article HTML needs no JS
       '--block-new-web-contents',         // no popups
       '--disable-web-security',           // needed for data: URIs in local dev
     ],
@@ -53,13 +57,19 @@ async function getBrowser() {
  * @returns {Promise<Buffer>} PDF binary buffer
  */
 async function convert(html, title, opts = {}) {
-  const fullHtml = buildHtml(title, html, opts.font || 'sans');
-  const browser  = await getBrowser();
+  // Fix 4: pre-fetch all external images and inline them as data: URIs so
+  // Puppeteer never needs to make outbound network requests. This is critical
+  // on Vercel's serverless runtime where egress to image CDNs is unreliable.
+  const inlinedHtml = await inlineImages(html);
+  const fullHtml    = buildHtml(title, inlinedHtml, opts.font || 'sans');
+  const browser     = await getBrowser();
 
   try {
     const page = await browser.newPage();
 
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+    // All images are already inlined as data: URIs — no external network requests
+    // will be made, so domcontentloaded is sufficient and avoids the 500 ms idle wait.
+    await page.setContent(fullHtml, { waitUntil: 'domcontentloaded' });
 
     const buffer = await page.pdf({
       format: opts.pageSize === 'Letter' ? 'Letter' : 'A4',
@@ -85,6 +95,99 @@ async function convert(html, title, opts = {}) {
   } finally {
     await browser.close();
   }
+}
+
+// ─── Image inlining ───────────────────────────────────────────────────────────
+
+/**
+ * Replace every <img src="https://…"> in the HTML with a data: URI so
+ * Puppeteer can render images without any outbound network access.
+ * Images that fail to fetch (timeout, 4xx, too large) are silently dropped
+ * — the <img> tag is removed rather than showing a broken placeholder.
+ */
+async function inlineImages(html) {
+  // Quick exit if there are no external images
+  if (!/<img/i.test(html)) return html;
+
+  // Collect all unique http(s) src values — handle both double and single quotes.
+  // Bug 6: original regex only matched double-quoted src attributes.
+  const srcRegex = /<img[^>]+src=["'](https?:\/\/[^"']+)["']/gi;
+  const srcs     = new Set();
+  let match;
+  while ((match = srcRegex.exec(html)) !== null) srcs.add(match[1]);
+  if (!srcs.size) return html;
+
+  // Fetch all in parallel, cap each at 2 MB / 5 s
+  const results = await Promise.all(
+    [...srcs].map(async src => {
+      try {
+        const buf  = await fetchWithLimit(src, IMG_MAX_BYTES, IMG_TIMEOUT_MS);
+        const mime = detectMime(buf);
+        const b64  = buf.toString('base64');
+        return [src, `data:${mime};base64,${b64}`];
+      } catch {
+        return [src, null]; // will be removed below
+      }
+    })
+  );
+
+  const dataMap = new Map(results);
+
+  // Replace each src — handle both quote styles (Bug 6)
+  return html.replace(/<img([^>]+)src=(["'])(https?:\/\/[^"']+)\2([^>]*)>/gi, (full, pre, quote, src, post) => {
+    const dataUri = dataMap.get(src);
+    if (!dataUri) return ''; // drop broken images entirely
+    return `<img${pre}src="${dataUri}"${post}>`;
+  });
+}
+
+function fetchWithLimit(url, maxBytes, timeoutMs, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    const lib   = url.startsWith('https') ? https : http;
+    const timer = setTimeout(() => { req.destroy(); reject(new Error('timeout')); }, timeoutMs);
+    let received = 0;
+    const chunks = [];
+
+    const req = lib.get(url, res => {
+      // Follow redirects (301, 302, 303, 307, 308)
+      if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+        clearTimeout(timer);
+        const location = res.headers['location'];
+        if (!location || redirectsLeft <= 0) {
+          reject(new Error(`Too many redirects or missing Location for ${url}`));
+          return;
+        }
+        // Resolve relative redirect Location against the original URL
+        const next = new URL(location, url).href;
+        fetchWithLimit(next, maxBytes, timeoutMs, redirectsLeft - 1).then(resolve, reject);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        clearTimeout(timer);
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      res.on('data', chunk => {
+        received += chunk.length;
+        if (received > maxBytes) {
+          clearTimeout(timer); res.destroy(); reject(new Error('too large'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on('end',   () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+      res.on('error', err => { clearTimeout(timer); reject(err); });
+    });
+    req.on('error', err => { clearTimeout(timer); reject(err); });
+  });
+}
+
+function detectMime(buf) {
+  if (buf[0] === 0xFF && buf[1] === 0xD8) return 'image/jpeg';
+  if (buf[0] === 0x89 && buf[1] === 0x50) return 'image/png';
+  if (buf[0] === 0x47 && buf[1] === 0x49) return 'image/gif';
+  if (buf[0] === 0x52 && buf[1] === 0x49) return 'image/webp';
+  return 'image/png';
 }
 
 const FONT_STACK = {
